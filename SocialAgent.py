@@ -9,19 +9,20 @@ import json
 class DailySheet:
     row_num = 7
     index_num = 3
-    index = ['본관', '민원실', '정문']
+    index = ['민원실', '정문1', "정문2"]
     #                  0    1    2    3     4     5
     morning_worker = ['1', '3', '8', '8', '13', '주']
     #              0    1    2    3    4    5    6    7     8     9    10    11    12    13    14    15 
     all_worker = ['1', '2', '3', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17']
 
-    def __init__(self, day):
-        self.date = day
+    def __init__(self, start_day, end_day=None):
+        self.date = start_day
+        self.end_day = end_day
         "-----Modify Time Table Structure-----"
         self.tt_struct = [
-                {'start': 1, "num": 4},
                 {'start': 0, "num": 7},
-                {'start': 1, "num": 6}
+                {'start': 1, "num": 5},
+                {'start': 1, "num": 5}
             ] 
         "-------------------------------------"
         self.worker_idx = -1
@@ -30,14 +31,18 @@ class DailySheet:
 
 
 class MonthlySheet(DailySheet):
-    def __init__(self, day, exception):
-        super().__init__(day)
+    def __init__(self, exception, start_day, end_day=None):
+        super().__init__(start_day, end_day)
         self.office_day = []
-        holiday = [x[0].strftime("%Y-%m-%d") for x in holidays.KR(years=day.year).items() \
-                if x[0].month == day.month]
-        _, day_count = calendar.monthrange(day.year, day.month)
-        for day_it in range(1, day_count+1):
-            d = datetime.date(day.year, day.month, day_it)
+        holiday = [x[0].strftime("%Y-%m-%d") for x in holidays.KR(years=self.date.year).items() \
+                if x[0].month == self.date.month]
+        if end_day is None:
+            _, end_day_temp = calendar.monthrange(self.date.year, self.date.month)
+        else:
+            end_day_temp = end_day.day
+
+        for day_it in range(start_day.day, end_day_temp+1):
+            d = datetime.date(self.date.year, self.date.month, day_it)
             if d.weekday() < 5 \
             and d.strftime("%Y-%m-%d") not in holiday + exception:
                 today_sheet = DailySheet(d)
@@ -52,8 +57,7 @@ class MonthlySheet(DailySheet):
             day.morning_idx = cur_morning_idx
 
             rot = day.all_worker[cur_worker_idx:] + day.all_worker[:cur_worker_idx]
-            day.rotation = rot[:day.tt_struct[0]['num']] + [day.morning_worker[cur_morning_idx]] + rot[day.tt_struct[0]['num']:]
-
+            day.rotation = [day.morning_worker[cur_morning_idx]] + rot
             cur_worker_idx = (cur_worker_idx - 1) % len(self.all_worker)
             cur_morning_idx = (cur_morning_idx + 1) % len(self.morning_worker)
         """--------------------------------"""
@@ -252,13 +256,6 @@ def cell_data(sht, i, today):
     cur_col = i%3*(today.index_num + 1) + 3
     next_col = (i%3+1)*(today.index_num + 1) + 3
 
-
-    #day_cell = num2cell((cur_row-1, cur_col-1))
-    #sht.update(day_cell, today.date.strftime("%m/%d"))
-
-    #index_cells = num2cell((cur_row-1, cur_col), (cur_row-1, cur_col+today.index_num-1))
-    #sht.update(index_cells, [today.index])
-
     rotation_cells = num2cell((cur_row-1, cur_col-1), (next_row-2, next_col-2))
     time_table = []
     pg = 0
@@ -273,6 +270,7 @@ def cell_data(sht, i, today):
     time_table = list(map(list,zip(*time_table)))
     time_table = [[today.date.strftime("%m/%d")] + today.index] + time_table
     sht.update(rotation_cells, time_table)
+
 
 @keep_try
 def cell_merge(sht, i, today):
@@ -298,37 +296,46 @@ def cell_merge(sht, i, today):
     sht.merge_cells(merged_cells)
 
 
-def create_sheet(ss, now_day, first_idx, exception):
-    now = MonthlySheet(now_day, exception)
+def access_sheet(ss, start_day):
+    row_num = 70
+    col_num = 17
+    try:
+        sht = ss.worksheet(start_day.strftime("%m월"))
+        return sht
+    except gspread.exceptions.WorksheetNotFound:
+        sht = ss.add_worksheet(title=start_day.strftime("%m월"), rows=str(row_num), cols=str(col_num))
+        return sht
+
+
+def fill_sheet(ss, sht, first_idx, exception, start_day, end_day=None, start_point=0):
+    now = MonthlySheet(exception, start_day, end_day)
     now.set_monthly_time(first_idx[0], first_idx[1])
-
-    row_num = max(70, math.ceil(len(now.office_day)/3)*(now.row_num + 1) + 6)
-    col_num = 3*(now.index_num + 1) + 4
-
-    sht = ss.add_worksheet(title=now_day.strftime("%m월"), rows=str(row_num), cols=str(col_num))
 
     cell_sizing(ss, sht, "COLUMNS", (1, 1), 20)
 
     for i, today in enumerate(now.office_day):
-        cell_merge(sht, i, today)
-        cell_data(sht, i, today)
-        cell_styling(ss, sht, i, today)
+        cell_merge(sht, i+start_point, today)
+        cell_data(sht, i+start_point, today)
+        cell_styling(ss, sht, i+start_point, today)
 
 
 if __name__ == "__main__":
     filename = "청원경찰서 공익 근무표"
     ss = init_sheets("test.json", filename) 
 
-    day = datetime.date(2022, 6, 1)
+    start_day = datetime.date(2022, 6, 1)
+    #end_day = datetime.date(2022, 7, 10)
+    #start_point = 14
 
     #  0   1   2   3   4   5   6   7    8    9   10   11   12   13   14   15
     # '1','2','3','5','6','7','8','9','10','11','12','13','14','15','16','17'
     #  0   1   2   3    4   5
     # '1','3','8','8','13','주'
     #           ord, morn
-    first_idx = (10, 3) 
+    first_idx = (5, 2) 
     #          "2022-06-01"
     exception = [
             "2022-06-01"
             ]
-    create_sheet(ss, day, first_idx, exception)
+    sht = access_sheet(ss, start_day)
+    fill_sheet(ss, sht, first_idx, exception, start_day)
