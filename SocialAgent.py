@@ -13,7 +13,7 @@ class DailySheet:
     #                  0    1    2    3     4     5
     morning_worker = ['1', '3', '8', '8', '13', '주']
     #              0    1    2    3    4    5    6    7     8     9    10    11    12    13    14    15 
-    all_worker = ['1', '2', '3', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17']
+    all_worker = ['1', '2', '3', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18']
 
     def __init__(self, start_day, end_day=None):
         self.date = start_day
@@ -57,6 +57,7 @@ class MonthlySheet(DailySheet):
             day.morning_idx = cur_morning_idx
 
             rot = day.all_worker[cur_worker_idx:] + day.all_worker[:cur_worker_idx]
+            del rot[day.row_num-1]
             day.rotation = [day.morning_worker[cur_morning_idx]] + rot
             cur_worker_idx = (cur_worker_idx - 1) % len(self.all_worker)
             cur_morning_idx = (cur_morning_idx + 1) % len(self.morning_worker)
@@ -323,19 +324,20 @@ if __name__ == "__main__":
     filename = "청원경찰서 공익 근무표"
     ss = init_sheets("test.json", filename) 
 
-    start_day = datetime.date(2022, 6, 1)
+    start_day = datetime.date(2022, 7, 1)
     #end_day = datetime.date(2022, 7, 10)
-    #start_point = 14
+    start_point = 0
 
     #  0   1   2   3   4   5   6   7    8    9   10   11   12   13   14   15
     # '1','2','3','5','6','7','8','9','10','11','12','13','14','15','16','17'
     #  0   1   2   3    4   5
     # '1','3','8','8','13','주'
     #           ord, morn
-    first_idx = (5, 2) 
+    first_idx = (10, 5) 
+
     #          "2022-06-01"
     exception = [
-            "2022-06-01"
             ]
+
     sht = access_sheet(ss, start_day)
-    fill_sheet(ss, sht, first_idx, exception, start_day)
+    fill_sheet(ss, sht, first_idx, exception, start_day, start_point=start_point)
